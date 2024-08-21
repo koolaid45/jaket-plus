@@ -24,6 +24,8 @@ public class Doll : MonoBehaviour
     /// <summary> Event triggered after the start of emote. </summary>
     public Action OnEmoteStart = () => { };
 
+    /// <summary> Hat and jacket that the doll wears. </summary>
+    public int Hat, Jacket;
     /// <summary> Whether the player uses custom weapon colors. </summary>
     public bool CustomColors;
     /// <summary> Custom weapon colors themselves. </summary>
@@ -36,8 +38,8 @@ public class Doll : MonoBehaviour
     /// <summary> Position in which the doll holds an item. </summary>
     public Vector3 HoldPosition => Hooking ? Hook.position : HookRoot.position;
 
-    /// <summary> Materials of the wings, coin and skateboard. </summary>
-    public Material WingMat, CoinMat, SkateMat;
+    /// <summary> Materials of the wings, coin, skateboard and big ears. </summary>
+    public Material WingMat, CoinMat, SkateMat, EarsMat;
     /// <summary> Trail of the wings. </summary>
     public TrailRenderer WingTrail;
     /// <summary> Light of the wings. </summary>
@@ -46,18 +48,19 @@ public class Doll : MonoBehaviour
     public LineRenderer HookWinch;
 
     /// <summary> Spawns a preview of the given emote. </summary>
-    public static Doll Spawn(Transform parent, Team team, byte emote, byte rps) =>
+    public static Doll Spawn(Transform parent, Team team, int hat, int jacket, byte emote, byte rps) =>
         UIB.Component<Doll>(Instantiate(ModAssets.Preview, parent), doll =>
         {
             doll.transform.localPosition = new(0f, -1.5f);
             doll.transform.localScale = Vector3.one * 2.18f;
 
-            doll.ApplyTeam(team);
-            doll.Suits.gameObject.SetActive(true);
-            // TODO load local players' suit + ApplySuit
-
+            doll.Hat = hat;
+            doll.Jacket = jacket;
             doll.Emote = emote;
             doll.Rps = rps;
+
+            doll.ApplyTeam(team);
+            doll.ApplySuit();
         });
 
     private void Awake()
@@ -78,6 +81,7 @@ public class Doll : MonoBehaviour
         WingMat = V3.Find("V3").GetComponent<Renderer>().materials[1];
         CoinMat = Coin.GetComponent<Renderer>().material;
         SkateMat = Skateboard.GetComponent<Renderer>().material;
+        EarsMat = Suits.Find("Big Ears").GetComponent<Renderer>().material;
         WingTrail = GetComponentInChildren<TrailRenderer>();
         WingLight = GetComponentInChildren<Light>();
         HookWinch = GetComponentInChildren<LineRenderer>(true);
@@ -144,18 +148,23 @@ public class Doll : MonoBehaviour
 
     public void ApplyTeam(Team team)
     {
-        WingMat.mainTexture = SkateMat.mainTexture = ModAssets.WingTextures[(int)team];
+        WingMat.mainTexture = SkateMat.mainTexture = EarsMat.mainTexture = ModAssets.WingTextures[(int)team];
         CoinMat.color = team.Color();
 
         if (WingTrail) WingTrail.startColor = team.Color() with { a = .5f };
         if (WingLight) WingLight.color = team.Color();
-
-        // TODO make it part of customization
-        Suits.GetChild(0).gameObject.SetActive(team == Team.Pink);
     }
 
     public void ApplySuit()
     {
+        foreach (Transform suit in Suits) suit.gameObject.SetActive(false);
+
+        int hat = Shop.Entries[Hat].hierarchyId;
+        if (hat != -1) Suits.GetChild(hat).gameObject.SetActive(true);
+
+        int jacket = Shop.Entries[Jacket].hierarchyId;
+        if (jacket != -1) Suits.GetChild(jacket).gameObject.SetActive(true);
+
         foreach (var getter in Hand.GetComponentsInChildren<GunColorGetter>())
         {
             var renderer = getter.GetComponent<Renderer>();
@@ -182,8 +191,13 @@ public class Doll : MonoBehaviour
 
     public void ReadSuit(Reader r)
     {
+        Hat = r.Int();
+        Jacket = r.Int();
+
         CustomColors = r.Bool();
         if (CustomColors) { Color1 = r.Color(); Color2 = r.Color(); Color3 = r.Color(); }
+
+        ApplySuit();
     }
 
     #endregion
